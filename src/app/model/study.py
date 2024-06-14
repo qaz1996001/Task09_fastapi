@@ -21,7 +21,8 @@ class StudyModel(Base):
     accession_number  : Mapped[str]       = mapped_column(String, index=True)
     series            : Mapped[List["SeriesModel"]] = relationship(back_populates="study")
 
-    text              : Mapped[List["TextReportModel"]] = relationship(back_populates="study")
+    # text              : Mapped[List["TextReportModel"]] = relationship(back_populates="study")
+    text              : Mapped["TextReportModel"] = relationship(back_populates="study", uselist=False)
     project           : Mapped[List["ProjectModel"]] = relationship(secondary="project_study",
                                                                     back_populates="study")
     project_associations : Mapped[List["ProjectStudyModel"]] = relationship(back_populates="study")

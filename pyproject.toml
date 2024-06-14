@@ -17,6 +17,7 @@ dependencies = [
     "pydantic>=2.7.4",
     "sqlmodel>=0.0.18",
     "fastapi-pagination==0.12.25",
+    "sqlalchemy-filters==0.13.0",
 ]
 requires-python = ">=3.10"
 readme = "README.md"

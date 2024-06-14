@@ -1,5 +1,6 @@
 import sentry_sdk
 from fastapi import FastAPI
+from fastapi.responses import ORJSONResponse
 from fastapi.routing import APIRoute
 from fastapi_pagination import add_pagination
 from starlette.middleware.cors import CORSMiddleware
@@ -19,6 +20,7 @@ app = FastAPI(
     title=settings.PROJECT_NAME,
     openapi_url=f"{settings.API_V1_STR}/openapi.json",
     generate_unique_id_function=custom_generate_unique_id,
+    default_response_class=ORJSONResponse
 )
 
 

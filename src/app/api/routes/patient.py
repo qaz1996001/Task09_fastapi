@@ -54,7 +54,7 @@ def post_patient(filter_schema : FilterSchema,
                  session: SessionDep) -> Page[PatientOut]:
     print('filter_schema')
     print(filter_schema.dict())
-    patient_items_list, total, raw_params, params = paginate_items(session, Select(PatientModel).where(1==1))
+    patient_items_list, total, raw_params, params = paginate_items(session, Select(PatientModel))
     response_list = []
 
     for patient_items in patient_items_list:

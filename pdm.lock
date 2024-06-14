@@ -5,7 +5,7 @@
 groups = ["default"]
 strategy = ["cross_platform", "inherit_metadata"]
 lock_version = "4.4.1"
-content_hash = "sha256:d726bbc1708b50c3fdae74325334a789538a1d1e423771443857ac574bd66a86"
+content_hash = "sha256:9991105bd74529c70cf4940d33abf7b0b987ea1727d9bdfc42dc52dd53b13077"
 
 [[package]]
 name = "annotated-types"
@@ -417,6 +417,17 @@ files = [
 ]
 
 [[package]]
+name = "six"
+version = "1.16.0"
+requires_python = ">=2.7, !=3.0.*, !=3.1.*, !=3.2.*"
+summary = "Python 2 and 3 compatibility utilities"
+groups = ["default"]
+files = [
+    {file = "six-1.16.0-py2.py3-none-any.whl", hash = "sha256:8abb2f1d86890a2dfb989f9a77cfcfd3e47c2a354b01111771326f8aa26e0254"},
+    {file = "six-1.16.0.tar.gz", hash = "sha256:1e61c37477a1626458e36f7b1d82aa5c9b094fa4802892072e49de9c60c4c926"},
+]
+
+[[package]]
 name = "sniffio"
 version = "1.3.1"
 requires_python = ">=3.7"
@@ -456,6 +467,21 @@ files = [
     {file = "SQLAlchemy-2.0.6-cp311-cp311-win_amd64.whl", hash = "sha256:82691d3539023c3cee5ae055c47bf873728cd6b33bfaa7b916bea5a99b92f700"},
     {file = "SQLAlchemy-2.0.6-py3-none-any.whl", hash = "sha256:c5d754665edea1ecdc79e3023659cb5594372e10776f3b3734d75c2c3ce95013"},
     {file = "SQLAlchemy-2.0.6.tar.gz", hash = "sha256:c343f0b546495f5d7a239c70bf50a99a48d7321c165b82afafa8483b9ebebf6e"},
+]
+
+[[package]]
+name = "sqlalchemy-filters"
+version = "0.13.0"
+requires_python = ">=3.7"
+summary = "A library to filter SQLAlchemy queries."
+groups = ["default"]
+dependencies = [
+    "six>=1.10.0",
+    "sqlalchemy>=1.0.16",
+]
+files = [
+    {file = "sqlalchemy-filters-0.13.0.tar.gz", hash = "sha256:40f2daead93c4db2409cf5e5abf67a420179f9e5c1df5c15fa1b474f6533b105"},
+    {file = "sqlalchemy_filters-0.13.0-py3-none-any.whl", hash = "sha256:aa4595b90d152eb76fa312a3e03d5d675f0c2e16762751f340f5449468689d9a"},
 ]
 
 [[package]]
