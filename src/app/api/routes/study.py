@@ -16,9 +16,24 @@ from app.core.paginate import paginate_items
 from app.model.study import StudyModel,TextReportModel
 from app.model.patient import PatientModel
 from app.model.series import SeriesModel
-
+from .patient import PatientIn
 
 router = APIRouter()
+
+
+class StudyPostIn(BaseModel):
+    patient_uid       : uuid.UUID
+    study_date        : datetime.date
+    study_time        : datetime.time
+    study_description : str
+    accession_number  : str
+
+
+class StudyPatientPostIn(PatientIn):
+    study_date        : datetime.date
+    study_time        : datetime.time
+    study_description : str
+    accession_number  : str
 
 
 class StudyOut(BaseModel):
@@ -123,8 +138,25 @@ def get_study(session: SessionDep) -> Page[StudyOut]:
     return page
 
 
-@router.post("/")
-def post_study(filter_schema : FilterSchema,
+
+@router.post(path="/",
+             summary = "patient 存在，加入study")
+def post_study(session: SessionDep,
+               study_postIn_list: List[StudyPostIn]):
+
+    return ""
+
+
+@router.post(path="/patient",
+             summary = "patient 不存在，加入study"
+             )
+def post_study_patient(session: SessionDep,
+                       study_patient_postIn_list: List[StudyPatientPostIn]):
+    return ""
+
+
+@router.post("/query")
+def post_study_query(filter_schema : FilterSchema,
                  session: SessionDep) -> Page[StudyOut]:
     print('filter_schema')
     print(filter_schema.dict())
@@ -136,8 +168,8 @@ def post_study(filter_schema : FilterSchema,
 
 
 
-@router.post("/series")
-async def post_study_series(filter_schema : FilterSchema,
+@router.post("/query/series")
+async def post_study_series_query(filter_schema : FilterSchema,
                       session: SessionDep) -> Page[StudySeriesOut]:
     filter_ = filter_schema.dict()['filter_']
     model_field_list = get_model_by_field(filter_)
@@ -169,18 +201,14 @@ async def post_study_series(filter_schema : FilterSchema,
             map(lambda x: x['value'] == any_(func.cast(q1.c.series_description, ARRAY(Text))),
                 series_description_filter))
 
-        q2 = session.query(q1).filter(*series_description_filter_sqlaichemy_)
-        print('q2')
-        print(q2)
-        print('q2')
+        filtered_query = session.query(q1).filter(*series_description_filter_sqlaichemy_)
+        print('filtered_query')
+        print(filtered_query)
+        print('filtered_query')
     else:
         filtered_query = query
 
-    print('filtered_query')
-    print(filtered_query)
-
-    # study_items_list, total, raw_params, params = paginate_items(session, filtered_query)
-    study_items_list, total, raw_params, params = paginate_items(session, q2)
+    study_items_list, total, raw_params, params = paginate_items(session, filtered_query)
     response_list = get_StudySeriesOut(study_items_list)
     page: Page[StudySeriesOut] = create_page(response_list, total, params)
     return page
