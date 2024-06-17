@@ -4,16 +4,17 @@ from typing import Annotated, Union, Any, List, Literal
 from fastapi import APIRouter, Depends, HTTPException, Body, Query
 from fastapi_pagination import Page, paginate
 from fastapi_pagination.api import create_page
+from pydantic import TypeAdapter
 # from pydantic.fields import FieldInfo
 # from pydantic.json_schema import DEFAULT_REF_TEMPLATE, GenerateJsonSchema, JsonSchemaMode
 # from pydantic.main import IncEx
 # from pydantic_core import PydanticUndefined
-from sqlalchemy import func, or_, any_
+from sqlalchemy import func, or_, any_,text
 from sqlalchemy.sql import Select
 from sqlalchemy_filters import apply_filters
 from app.core import SessionDep
 from app.core.paginate import paginate_items
-from app.schema.patient import PatientIn, PatientOut
+from app.schema.patient import PatientIn, PatientOut, StudyOut
 from app.schema.patient import PatientPostOut,PatientDeleteIn,PatientStudyOut
 from app.schema.patient import FilterSchema,field_model
 from app.model import PatientModel
@@ -100,11 +101,11 @@ def post_patient_study_query(session: SessionDep,
                            PatientModel.patient_id.label('patient_id'),
                            PatientModel.gender.label('gender'),
                            PatientModel.birth_date.label('birth_date'),
-                           func.json_agg(func.json_build_object(StudyModel.uid.label('study_uid'),StudyModel.uid,
-                                                                StudyModel.study_date.label('study_date'),StudyModel.study_date,
-                                                                StudyModel.study_time.label('study_time'),StudyModel.study_time,
-                                                                StudyModel.study_description.label('study_description'),StudyModel.study_description,
-                                                                StudyModel.accession_number.label('accession_number'),StudyModel.accession_number,
+                           func.json_agg(func.json_build_object(text('\'study_uid\''),StudyModel.uid,
+                                                                text('\'study_date\''),StudyModel.study_date,
+                                                                text('\'study_time\''),StudyModel.study_time,
+                                                                text('\'study_description\''),StudyModel.study_description,
+                                                                text('\'accession_number\''),StudyModel.accession_number,
                                                                 )).label('study_array_json'),
                            ).
              join(PatientModel, PatientModel.uid == StudyModel.patient_uid).
@@ -112,7 +113,20 @@ def post_patient_study_query(session: SessionDep,
              order_by(PatientModel.patient_id.desc()))
     print(query)
     items_list, total, raw_params, params = paginate_items(session, query)
-    print(items_list)
-    response_list = items_list
+    response_list = []
+    for item in items_list:
+        study_list = []
+        for study_array in item.study_array_json:
+            studyOut = StudyOut(**study_array)
+            study_list.append(studyOut)
+        patient_model = PatientStudyOut(patient_id = item.patient_id,
+                                        gender     = item.gender,
+                                        birth_date = item.birth_date,
+                                        study = study_list
+        )
+        response_list.append(patient_model)
+    print('response_list[0]')
+    print(response_list[0])
     page: Page[PatientStudyOut] = create_page(response_list, total, params)
+    print(type(page))
     return page
