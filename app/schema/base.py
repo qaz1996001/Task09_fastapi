@@ -3,6 +3,7 @@ import re
 import uuid
 from typing import Any, List, Optional, Dict
 from fastapi import Query
+from fastapi_pagination import Page, Params
 from pydantic import BaseModel,Field
 
 
@@ -12,6 +13,59 @@ class PageSchema(BaseModel):
     sort : str = Query(...)
 
 
+
+
+class CodePage(Page):
+    code      : int = 2000
+    key       : List[str] = Field(...)
+    group_key : Dict[str, Any] = Field(...)
+    op_list   : List[str] = Field(...)
+
+
+
+class FilterItemSchema(BaseModel):
+    field :str = Field(default=None,examples = ['accession_number'])
+    op    :str = Field(default=None,examples = ['eq'])
+    value :Any = Field(default=None,examples = ['21301160043'])
+
+
+class FilterSchema(BaseModel):
+    filter_ :List[FilterItemSchema] = Field(...)
+
+
+field_model = dict(
+    study_uid='StudyModel',
+    patient_uid='PatientModel',
+    patient_id='PatientModel',
+    gender='PatientModel',
+    study_date='StudyModel',
+    study_time='StudyModel',
+    study_description='StudyModel',
+    accession_number='StudyModel',
+    series='SeriesModel',
+    text= 'TextReportModel',
+    series_description = 'SeriesModel',
+)
+
+op_list = [
+    "like",
+    "==",
+    ">",
+    "<",
+    ">=",
+    "<=",
+    "!=",
+    "regexp",
+    "is_not_null",
+    "in"]
+
+def get_model_by_field(field_list):
+    filter_field_list = list(filter(lambda x: field_model.get(x['field']) is not None, field_list))
+    model_field_list = []
+    for filter_field in filter_field_list:
+        filter_field['model'] = field_model.get(filter_field['field'])
+        model_field_list.append(filter_field)
+    return model_field_list
 
 
 series_structure_sort = {
@@ -187,3 +241,8 @@ def get_group_key_by_series(columns):
                                key=lambda x: series_functional_sort.get(x, 999))
     )
 
+
+
+class CustomParams(Params):
+    page: int = Query(1, ge=1, description="Page number")
+    size: int = Query(20, ge=1, le=1000, description="Page size")

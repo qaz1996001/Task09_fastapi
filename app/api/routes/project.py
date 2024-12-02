@@ -2,6 +2,7 @@ import uuid
 from datetime import timedelta
 from typing import Annotated, Any, List
 
+import pandas as pd
 from fastapi import APIRouter,Query,Form,Depends,Response
 from fastapi_pagination import Page,LimitOffsetPage,paginate
 from fastapi_pagination.api import create_page
@@ -13,6 +14,7 @@ from app.core.paginate import paginate_items
 from app.core import SessionDep
 from app.model.project import ProjectModel,ProjectStudyModel,ProjectSeriesModel
 from app.model.study import StudyModel,TextReportModel
+from app.schema.base import CodePage
 from app.schema.project import StudyOutput
 
 router = APIRouter()
@@ -24,13 +26,21 @@ class ProjectOut(BaseModel):  # define your model
 
 
 @router.get("/")
-async def get_project_model(session: SessionDep) -> Page[ProjectOut]:
+async def get_project_model(session: SessionDep) -> CodePage[ProjectOut]:
     project_model_list , total, raw_params, params = paginate_items(session, Select(ProjectModel))
     response_list = []
     for project_model in project_model_list:
         response_list.append(ProjectOut(project_uid=project_model[0].uid.hex,
                                         project_name=project_model[0].name))
-    page:Page[ProjectOut] = create_page(response_list, total, params)
+    additional_data = {'code': 2000,
+                       'key': list(ProjectOut.__fields__.keys()),
+                       'group_key': {"":None},
+                       'op_list': []
+                       }
+    page: CodePage[ProjectOut] = create_page(response_list,
+                                             total=total,
+                                             params=params,
+                                             **additional_data)
     return page
 
 

@@ -1,27 +1,28 @@
 import datetime
-from typing import Annotated, Union, Any, List, Literal
+from typing import Annotated, List,Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Body, Query
-from fastapi_pagination import Page, paginate
+from fastapi import APIRouter, Query
+from fastapi_pagination import Page
 from fastapi_pagination.api import create_page
-from pydantic import TypeAdapter
-# from pydantic.fields import FieldInfo
-# from pydantic.json_schema import DEFAULT_REF_TEMPLATE, GenerateJsonSchema, JsonSchemaMode
-# from pydantic.main import IncEx
-# from pydantic_core import PydanticUndefined
-from sqlalchemy import func, or_, any_,text
+from fastapi_pagination.customization import CustomizedPage, UseModelConfig
+
+from sqlalchemy import func, or_, text,and_
 from sqlalchemy.sql import Select
-from sqlalchemy_filters import apply_filters
 from app.core import SessionDep
 from app.core.paginate import paginate_items
 from app.schema.patient import PatientIn, PatientOut, StudyOut
 from app.schema.patient import PatientPostOut,PatientDeleteIn,PatientStudyOut
-from app.schema.patient import FilterSchema,field_model
+from app.schema.patient import FilterSchema
 from app.model import PatientModel
 from app.model import StudyModel
 from .. import utils
 
 router = APIRouter()
+Page = CustomizedPage[
+    Page,
+    UseModelConfig(extra="allow"),
+]
+
 
 
 sort_Query: str = Query(pattern="^(\+|\-)+")
@@ -32,10 +33,30 @@ async def hello_world():
     return "Hello World!"
 
 
+@router.get("/{patient_id:str}")
+def get_patient(patient_id:str,
+                 session: SessionDep,
+                 ) -> Optional[PatientOut]:
+    stmt = Select(PatientModel).filter(and_(PatientModel.deleted_at.is_(None),
+                                            PatientModel.patient_id == patient_id,
+                                            ))
+    print(stmt)
+    result = session.execute(stmt).first()[0]
+    print(result)
+    if result is not None:
+        patient_out = PatientOut(patient_uid=result.uid.hex,
+                                 patient_id=result.patient_id,
+                                 gender=result.gender,
+                                 birth_date=result.birth_date)
+        return patient_out
+    else:
+        return None
+
+
 @router.get("/")
-def get_patient(session: SessionDep,
+def get_patients(session: SessionDep,
                 sort: Annotated[str,sort_Query] = '+patient_id') -> Page[PatientOut]:
-    sort_column = utils.get_sort_asc_desc(PatientModel, sort,PatientModel.patient_id)
+    sort_column = utils.get_sort_asc_desc(PatientModel, sort, PatientModel.patient_id)
     stmt = Select(PatientModel).filter(PatientModel.deleted_at.is_(None)).order_by(sort_column)
     print(stmt)
     patient_items_list, total, raw_params, params = paginate_items(session,stmt)
@@ -51,7 +72,7 @@ def get_patient(session: SessionDep,
 
 
 @router.post("/")
-def post_patient(session: SessionDep,
+def post_patients(session: SessionDep,
                  patient_in_list: List[PatientIn],
                  ) -> PatientPostOut:
     data_list = []
@@ -74,7 +95,7 @@ def post_patient(session: SessionDep,
 
 
 @router.delete("/")
-def delete_patient(session: SessionDep,
+def delete_patients(session: SessionDep,
                    patient_delelte_in_list: List[PatientDeleteIn],
                  ):
     for patient_delelte_in in patient_delelte_in_list:
@@ -101,7 +122,7 @@ def post_patient_study_query(session: SessionDep,
                            PatientModel.patient_id.label('patient_id'),
                            PatientModel.gender.label('gender'),
                            PatientModel.birth_date.label('birth_date'),
-                           func.json_agg(func.json_build_object(text('\'study_uid\''),StudyModel.uid,
+                           func.json_agg(func.json_build_object( # text('\'study_uid\''),StudyModel.uid,
                                                                 text('\'study_date\''),StudyModel.study_date,
                                                                 text('\'study_time\''),StudyModel.study_time,
                                                                 text('\'study_description\''),StudyModel.study_description,
@@ -125,8 +146,11 @@ def post_patient_study_query(session: SessionDep,
                                         study = study_list
         )
         response_list.append(patient_model)
-    print('response_list[0]')
     print(response_list[0])
-    page: Page[PatientStudyOut] = create_page(response_list, total, params)
-    print(type(page))
+    additional_data = {'keys':['uid', 'patient_id', 'gender', 'birth_date']}
+    page: Page[PatientStudyOut] = create_page( response_list,
+                                               total,
+                                               params,
+                                               **additional_data,)
+
     return page

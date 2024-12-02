@@ -25,7 +25,7 @@ def parse_cors(v: Any) -> list[str] | str:
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=fr"C:\Users\user\PycharmProjects\Task09_fastapi\.env", env_ignore_empty=True, extra="ignore"
+        env_file=fr"D:\00_Chen\Task09_fastapi\.env", env_ignore_empty=True, extra="ignore"
     )
     API_V1_STR: str = "/api/v1"
     SECRET_KEY: str = secrets.token_urlsafe(32)

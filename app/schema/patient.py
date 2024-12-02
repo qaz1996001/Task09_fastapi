@@ -3,8 +3,9 @@ import typing
 from typing import Annotated, Union, Any, List, Literal
 from uuid import UUID
 from fastapi import Body
+from fastapi_pagination import Page
 from pydantic import BaseModel, Field, model_serializer
-
+from .base import op_list,CustomParams
 
 
 class PatientBase(BaseModel):
@@ -41,7 +42,7 @@ class PatientDeleteIn(BaseModel):
 
 
 class StudyOut(BaseModel):
-    study_uid: UUID
+    #study_uid: UUID
     study_date: datetime.date
     study_time: datetime.time
     study_description: str
@@ -72,3 +73,9 @@ field_model = dict(
     study_time='StudyModel',
     study_description='StudyModel',
     accession_number='StudyModel')
+
+
+class PatientGroupPage(Page):
+    group_key          : typing.Dict[str, List[str]]
+    op_list            : List[str] = op_list
+    __params_type__ = CustomParams
