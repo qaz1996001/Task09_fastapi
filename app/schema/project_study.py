@@ -5,9 +5,27 @@ from pydantic import BaseModel
 
 
 class ProjectStudyOutput(BaseModel):
-    data: Dict[str, Any]
+    project_study_uid : Union[uuid.UUID,str]
+    project_name      : Optional[str]
+    patient_id        : Optional[str]
+    gender            : Optional[str]
+    study_date        : Optional[str]
+    study_time        : Optional[str]
+    study_description : Optional[str]
+    accession_number  : Optional[str]
+    extra_data        : Optional[Dict[str, Any]]
     class Config:
         extra = "ignore"
+
+    # {'project_study_uid': UUID('57c436d7-c69d-4706-aa6f-735388500461'),
+    # 'project_name': 'SHH_Task_seg_Test',
+    # 'patient_id': '00001517',
+    # 'gender': 'F', 'age': 74,
+    # 'study_date': '2012-12-17',
+    # 'study_time': '18:17:06',
+    # 'study_description': 'Brain MRI , Stroke (-C)',
+    # 'accession_number': '211217039',
+    # 'extra_data': {}}
 
 
 class ProjectStudyPost(BaseModel):

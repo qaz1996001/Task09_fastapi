@@ -34,7 +34,7 @@ async def get_project_model(session: SessionDep) -> CodePage[ProjectOut]:
                                         project_name=project_model[0].name))
     additional_data = {'code': 2000,
                        'key': list(ProjectOut.__fields__.keys()),
-                       'group_key': {"":None},
+                       'group_key': {},
                        'op_list': []
                        }
     page: CodePage[ProjectOut] = create_page(response_list,

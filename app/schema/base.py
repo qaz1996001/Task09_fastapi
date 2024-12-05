@@ -1,6 +1,7 @@
 import datetime
 import re
 import uuid
+from enum import Enum
 from typing import Any, List, Optional, Dict
 from fastapi import Query
 from fastapi_pagination import Page, Params
@@ -15,10 +16,18 @@ class PageSchema(BaseModel):
 
 
 
+class GroupKeyEnum(str, Enum):
+    general_keys= "general_keys"
+    structure_keys = "structure_keys"
+    special_keys = "special_keys"
+    perfusion_keys = "perfusion_keys"
+    functional_keys = "functional_keys"
+    extra_data_keys = "extra_data_keys"
+
 class CodePage(Page):
     code      : int = 2000
     key       : List[str] = Field(...)
-    group_key : Dict[str, Any] = Field(...)
+    group_key : Dict[Optional[GroupKeyEnum], List[Optional[str]]] = Field(...)
     op_list   : List[str] = Field(...)
 
 
@@ -34,10 +43,10 @@ class FilterSchema(BaseModel):
 
 
 field_model = dict(
-    study_uid='StudyModel',
     patient_uid='PatientModel',
     patient_id='PatientModel',
     gender='PatientModel',
+    study_uid='StudyModel',
     study_date='StudyModel',
     study_time='StudyModel',
     study_description='StudyModel',
@@ -45,7 +54,7 @@ field_model = dict(
     series='SeriesModel',
     text= 'TextReportModel',
     series_description = 'SeriesModel',
-)
+    project_uid = 'ProjectStudyModel',)
 
 op_list = [
     "like",
@@ -59,6 +68,7 @@ op_list = [
     "is_not_null",
     "in"]
 
+
 def get_model_by_field(field_list):
     filter_field_list = list(filter(lambda x: field_model.get(x['field']) is not None, field_list))
     model_field_list = []
@@ -68,6 +78,23 @@ def get_model_by_field(field_list):
     return model_field_list
 
 
+
+series_general_pattern = re.compile(
+    ('patient_id|gender|age|study_date|study_time|study_description|accession_number'))
+series_structure_pattern = re.compile(('T1|T2|DWI|ADC'))
+series_special_pattern = re.compile(('MRA|SWAN|eSWAN'))
+series_perfusion_pattern = re.compile(('DSC|ASL'))
+series_functional_pattern = re.compile(('RESTING|CVR|DTI'))
+series_general_sort = {
+    'patient_id': 100,
+    'gender': 110,
+    'age': 120,
+    'study_date': 130,
+    'study_time': 140,
+    'study_description': 150,
+    'accession_number': 160,
+    'series_description': 170
+}
 series_structure_sort = {
     "ADC": 100,
     "DWI0": 110,
@@ -169,23 +196,6 @@ series_structure_sort = {
     'T2BRAVOCE_CORr': 506,
     'T2BRAVOCE_SAGr': 507,
 }
-
-series_general_pattern = re.compile(
-    ('patient_id|gender|age|study_date|study_time|study_description|accession_number'))
-series_structure_pattern = re.compile(('T1|T2|DWI|ADC'))
-series_special_pattern = re.compile(('MRA|SWAN|eSWAN'))
-series_perfusion_pattern = re.compile(('DSC|ASL'))
-series_functional_pattern = re.compile(('RESTING|CVR|DTI'))
-series_general_sort = {
-    'patient_id': 100,
-    'gender': 110,
-    'age': 120,
-    'study_date': 130,
-    'study_time': 140,
-    'study_description': 150,
-    'accession_number': 160,
-    'series_description': 170
-}
 series_special_sort = {
     'MRA_BRAIN': 100,
     'MRA_NECK': 110,
@@ -228,21 +238,23 @@ series_functional_sort = {
 
 
 def get_group_key_by_series(columns):
-    return dict(
-        general_keys=sorted(filter(lambda x: series_general_pattern.match(x) is not None, columns),
+    return {
+        GroupKeyEnum.general_keys:sorted(filter(lambda x: series_general_pattern.match(x) is not None, columns),
                             key=lambda x: series_general_sort.get(x, 999)),
-        structure_keys=sorted(filter(lambda x: series_structure_pattern.match(x) is not None, columns),
+        GroupKeyEnum.structure_keys:sorted(filter(lambda x: series_structure_pattern.match(x) is not None, columns),
                               key=lambda x: series_structure_sort.get(x, 999)),
-        special_keys=sorted(filter(lambda x: series_special_pattern.match(x) is not None, columns),
+        GroupKeyEnum.special_keys:sorted(filter(lambda x: series_special_pattern.match(x) is not None, columns),
                             key=lambda x: series_special_sort.get(x, 999)),
-        perfusion_keys=sorted(filter(lambda x: series_perfusion_pattern.match(x) is not None, columns),
+        GroupKeyEnum.perfusion_keys:sorted(filter(lambda x: series_perfusion_pattern.match(x) is not None, columns),
                               key=lambda x: series_perfusion_sort.get(x, 999)),
-        functional_keys=sorted(filter(lambda x: series_functional_pattern.match(x) is not None, columns),
+        GroupKeyEnum.functional_keys:sorted(filter(lambda x: series_functional_pattern.match(x) is not None, columns),
                                key=lambda x: series_functional_sort.get(x, 999))
-    )
+    }
 
 
 
 class CustomParams(Params):
     page: int = Query(1, ge=1, description="Page number")
     size: int = Query(20, ge=1, le=1000, description="Page size")
+
+

@@ -39,6 +39,7 @@ async def get_data(filter_schema : FilterSchema,
     model_field_list = get_model_by_field(filter_)
     print('model_field_list')
     print(model_field_list)
+    print(filter_)
     query: Query = session.query(ProjectStudyModel, StudyModel, PatientModel) \
         .join(StudyModel, ProjectStudyModel.study_uid == StudyModel.uid) \
         .join(PatientModel, StudyModel.patient_uid == PatientModel.uid)
@@ -76,9 +77,9 @@ async def get_data(filter_schema : FilterSchema,
         study_dict['age'] = get_age_by_study_date(study.patient.birth_date, study.study_date)
         study_dict.update(study.to_dict_view())
         study_dict['extra_data'] = project_study.extra_data
-        project_study_output = ProjectStudyOutput(data=study_dict)
-        response_list.append(project_study_output)
-    df: pd.DataFrame = pd.json_normalize(response_list)
+        project_study_output = ProjectStudyOutput(**study_dict)
+        response_list.append(project_study_output.dict())
+    df = pd.json_normalize(response_list, max_level=1)
     columns = df.columns.to_list()
     group_key = get_group_key_by_series(columns)
     group_key.update(get_extra_data_key(columns=columns))

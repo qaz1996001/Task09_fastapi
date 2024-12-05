@@ -44,6 +44,7 @@ def get_impression_by_text(x):
         else:
             return ''
 
+
 def get_StudyOut(study_items_list):
     response_list = []
     for study_items in study_items_list:
@@ -258,11 +259,88 @@ async def post_study_series_query(filter_schema : study_schema.FilterSchema,
     return page
 
 
+# @router.post("/query/series/download")
+# async def post_study_series_query(filter_schema : study_schema.FilterSchema,
+#                       session: SessionDep):
+#     filter_ = filter_schema.dict()['filter_']
+#     model_field_list = get_model_by_field(filter_)
+#     query = (session.query(StudyModel.uid.label('study_uid'),
+#                            StudyModel.patient_uid.label('patient_uid'),
+#                            PatientModel.patient_id.label('patient_id'),
+#                            PatientModel.gender.label('gender'),
+#                            PatientModel.birth_date.label('birth_date'),
+#                            StudyModel.study_date.label('study_date'),
+#                            StudyModel.study_time.label('study_time'),
+#                            StudyModel.study_description.label('study_description'),
+#                            StudyModel.accession_number.label('accession_number'),
+#                            func.array_agg(SeriesModel.series_description).label('series_description'),
+#                            ).
+#               join(PatientModel,StudyModel.patient_uid==PatientModel.uid).
+#              join(SeriesModel, StudyModel.uid == SeriesModel.study_uid).
+#              group_by(StudyModel.uid,
+#                       PatientModel.uid,
+#                       PatientModel.patient_id,
+#                       PatientModel.gender,
+#                       PatientModel.birth_date,
+#                       StudyModel.study_date,
+#                       StudyModel.study_time,
+#                       StudyModel.study_description,
+#                       StudyModel.accession_number).
+#              order_by(StudyModel.study_date.desc()))
+#
+#
+#     if len(model_field_list) > 0:
+#         series_description_filter = list(filter(lambda x: x['field'] == 'series_description', filter_))
+#         orther_filter             = list(filter(lambda x: x['field'] != 'series_description', filter_))
+#         filtered_query            = apply_filters(query, orther_filter)
+#
+#         q1 = filtered_query.cte('study_series')
+#         series_description_filter_sqlaichemy_ = list(
+#             map(lambda x: x['value'] == any_(func.cast(q1.c.series_description, ARRAY(Text))),
+#                 series_description_filter))
+#
+#         filtered_query = session.query(q1).filter(*series_description_filter_sqlaichemy_)
+#     else:
+#         filtered_query = query
+#
+#     response_list = session.execute(filtered_query).all()
+#     total = len(response_list)
+#     response_list, series_description_set = get_StudySeriesOut2(response_list)
+#     series_description_group_key = base_schema.get_group_key_by_series(list(series_description_set))
+#     series_description_group_key['general_keys'] = [ 'patient_id',
+#                                                      'gender',
+#                                                      'age',
+#                                                      'study_date',
+#                                                      'study_time',
+#                                                      'study_description',
+#                                                      'accession_number',]
+#
+#     additional_data = dict(series_description = sorted(series_description_set,
+#                                                        key=lambda x: base_schema.series_structure_sort.get(x, 999)),
+#                            group_key = series_description_group_key
+#                            )
+#     key_list = []
+#     key_list.extend(series_description_group_key['general_keys'])
+#     key_list.extend(series_description_group_key['structure_keys'])
+#     key_list.extend(series_description_group_key['special_keys'])
+#     key_list.extend(series_description_group_key['perfusion_keys'])
+#     key_list.extend(series_description_group_key['functional_keys'])
+#     response_dict = dict(
+#         items = response_list,
+#         total = total,
+#         key   = key_list
+#     )
+#     response_dict.update(additional_data)
+#     return response_dict
+
 @router.post("/query/series/download")
 async def post_study_series_query(filter_schema : study_schema.FilterSchema,
                       session: SessionDep):
+
     filter_ = filter_schema.dict()['filter_']
     model_field_list = get_model_by_field(filter_)
+    print('filter_',filter_)
+    print('model_field_list', model_field_list)
     query = (session.query(StudyModel.uid.label('study_uid'),
                            StudyModel.patient_uid.label('patient_uid'),
                            PatientModel.patient_id.label('patient_id'),
@@ -287,20 +365,21 @@ async def post_study_series_query(filter_schema : study_schema.FilterSchema,
                       StudyModel.accession_number).
              order_by(StudyModel.study_date.desc()))
 
-
     if len(model_field_list) > 0:
         series_description_filter = list(filter(lambda x: x['field'] == 'series_description', filter_))
         orther_filter             = list(filter(lambda x: x['field'] != 'series_description', filter_))
         filtered_query            = apply_filters(query, orther_filter)
-
-        q1 = filtered_query.cte('study_series')
-        series_description_filter_sqlaichemy_ = list(
-            map(lambda x: x['value'] == any_(func.cast(q1.c.series_description, ARRAY(Text))),
-                series_description_filter))
-
-        filtered_query = session.query(q1).filter(*series_description_filter_sqlaichemy_)
+        study_series_cte  = filtered_query.cte('study_series')
+        series_description_filter_sqlaichemy_ = list(map(lambda x: or_(literal_column('series_desc').like(x['value'])),series_description_filter))
+        filtered_query = session.query(study_series_cte).filter(
+            exists(
+                select(1)
+                .select_from(func.unnest(study_series_cte.c.series_description).alias('series_desc'))
+                .where(*series_description_filter_sqlaichemy_)))
     else:
         filtered_query = query
+
+    print('filtered_query', filtered_query)
 
     response_list = session.execute(filtered_query).all()
     total = len(response_list)
