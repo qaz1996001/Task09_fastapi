@@ -69,7 +69,8 @@ async def post_text_report_query(filter_schema : base_schema.FilterSchema,
     if len(filter_) > 0:
         orther_filter = list(filter(get_orther_filter, filter_))
         regexp_filter = list(filter(get_regexp_filter, filter_))
-        regexp_list = get_regexp(regexp_filter, TextReportModel)
+        print(regexp_filter)
+        regexp_list = get_regexp(regexp_filter)
         filtered_query = apply_filters(query, orther_filter)
         filtered_query = filtered_query.filter(*regexp_list)
     else:

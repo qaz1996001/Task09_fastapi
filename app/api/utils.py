@@ -38,9 +38,12 @@ def get_orther_filter(x):
         return False
     return True
 
-def get_regexp(regexp_filter_list, model):
+def get_regexp(regexp_filter_list):
+    import  importlib
+    module = importlib.import_module('app.model')
     regexp_list = []
     for i in regexp_filter_list:
+        model = getattr(module, i['model'])
         column = getattr(model, i['field'])
         regexp_list.append(column.regexp_match(i['value'], flags='i'))
     return regexp_list
