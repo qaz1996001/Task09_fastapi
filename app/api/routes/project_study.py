@@ -22,7 +22,8 @@ from app.core import SessionDep
 from app.model.patient import PatientModel
 from app.model.project import ProjectModel,ProjectStudyModel
 from app.model.study import StudyModel
-from app.schema.project_study import ProjectStudyOutput,ProjectStudyPost
+from app.schema.project import ProjectInput
+from app.schema.project_study import ProjectStudyOutput,ProjectStudyPost,ProjectStudyAccessionNumberPost
 from app.schema.base import CodePage,FilterSchema,get_model_by_field,get_group_key_by_series
 
 router = APIRouter()
@@ -32,8 +33,8 @@ async def hello_world():
     return "Hello World!"
 
 
-@router.post("/get_data")
-async def get_data(filter_schema : FilterSchema,
+@router.post("/query")
+async def post_query(filter_schema : FilterSchema,
                    session: SessionDep) -> CodePage[ProjectStudyOutput]:
     filter_ = filter_schema.dict()['filter_']
     model_field_list = get_model_by_field(filter_)
@@ -43,6 +44,7 @@ async def get_data(filter_schema : FilterSchema,
     query: Query = session.query(ProjectStudyModel, StudyModel, PatientModel) \
         .join(StudyModel, ProjectStudyModel.study_uid == StudyModel.uid) \
         .join(PatientModel, StudyModel.patient_uid == PatientModel.uid)
+
 
     extra_data_filter = list(filter(lambda x: 'extra_data.' in x['field'], filter_))
     extra_data_filter = list(map(convert_extra_data_filter_type, extra_data_filter))
@@ -65,6 +67,11 @@ async def get_data(filter_schema : FilterSchema,
     else:
         filtered_query = query
 
+    filtered_query = filtered_query.filter(PatientModel.deleted_at.is_(None),
+                                           StudyModel.deleted_at.is_(None),
+                                           ProjectStudyModel.deleted_at.is_(None),
+                                           )
+    print(filtered_query)
     items_list, total, raw_params, params = paginate_items(session, filtered_query)
     response_list = []
     for item in items_list:
@@ -108,7 +115,62 @@ async def post_study(project_study_post : ProjectStudyPost,
                                                                                               ProjectStudyModel.study_uid == result[0],
                                                                                               )).first()[0]
                 if project_study_model:
+                    continue
+                else:
+                    datetime_now = datetime.datetime.now()
+                    project_study_model = ProjectStudyModel(study_uid=result[0],
+                                                            project_uid=project_model.uid,
+                                                            extra_data={},
+                                                            created_at=datetime_now)
+                    session.add(project_study_model)
+            else:
+                continue
+        session.commit()
+        return {'code': '2000'}
+    else:
+        return {'code': '400'}
 
+# @router.post("/study")
+@router.post("/study/uid")
+async def post_study_uid(project_study_post : ProjectStudyPost,
+                         session: SessionDep) -> Dict[str, str]:
+    project_model = session.execute(session.query(ProjectModel).filter(ProjectModel.uid==project_study_post.project_uid)).first()[0]
+    if project_model:
+        result_list = session.execute(session.query(StudyModel.uid).filter(StudyModel.uid.in_(project_study_post.study_uid_list))).all()
+        for result in result_list:
+            if result is not None:
+                project_study_model = session.execute(session.query(ProjectStudyModel).filter(ProjectStudyModel.project_uid==project_model.uid,
+                                                                                              ProjectStudyModel.study_uid == result[0],
+                                                                                              )).first()[0]
+                if project_study_model:
+                    continue
+                else:
+                    datetime_now = datetime.datetime.now()
+                    project_study_model = ProjectStudyModel(study_uid=result[0],
+                                                            project_uid=project_model.uid,
+                                                            extra_data={},
+                                                            created_at=datetime_now)
+                    session.add(project_study_model)
+            else:
+                continue
+        session.commit()
+        return {'code': '2000'}
+    else:
+        return {'code': '400'}
+
+
+@router.post("/study/accession_number")
+async def post_study_accession_number(project_study_post : ProjectStudyAccessionNumberPost,
+                                      session: SessionDep) -> Dict[str, str]:
+    project_model = session.execute(session.query(ProjectModel).filter(ProjectModel.uid==project_study_post.project_uid)).first()[0]
+    if project_model:
+        result_list = session.execute(session.query(StudyModel.uid).filter(StudyModel.uid.in_(project_study_post.study_uid_list))).all()
+        for result in result_list:
+            if result is not None:
+                project_study_model = session.execute(session.query(ProjectStudyModel).filter(ProjectStudyModel.project_uid==project_model.uid,
+                                                                                              ProjectStudyModel.study_uid == result[0],
+                                                                                              )).first()[0]
+                if project_study_model:
                     continue
                 else:
                     datetime_now = datetime.datetime.now()
@@ -168,6 +230,40 @@ async def post_download_study(
         session: SessionDep) -> Dict[str, str]:
     return {'code': '2000'}
 
+
+@router.get("/download/infinitt/{project_name:str}")
+async def get_download_infinitt(project_name:str,
+                                 session: SessionDep) -> Dict[str, List[str]]:
+    project             = session.query(ProjectModel).where(ProjectModel.name == project_name).first()
+    if project:
+        project_study_list  = session.query(ProjectStudyModel).where(ProjectStudyModel.project_uid==project.uid).all()
+        accession_number_list = list(map(lambda x: x.study.accession_number, project_study_list))
+        result = []
+        accession_number_len = len(accession_number_list)
+        for index in range((accession_number_len//50)+1):
+            start_index = index*50
+            end_index = start_index + 50
+            result.append(','.join(accession_number_list[start_index:end_index]))
+        return {'code': result}
+    return {}
+
+
+@router.post("/download/infinitt/{project_name:str}")
+async def post_download_infinitt(project_name:str,
+                                 filter_schema : FilterSchema,
+                                 session: SessionDep) -> Dict[str, List[str]]:
+    project = session.query(ProjectModel).where(ProjectModel.name == project_name).first()
+    if project:
+        project_study_list  = session.query(ProjectStudyModel).where(ProjectStudyModel.project_uid==project.uid).all()
+        accession_number_list = list(map(lambda x: x.study.accession_number, project_study_list))
+        result = []
+        accession_number_len = len(accession_number_list)
+        for index in range((accession_number_len//50)+1):
+            start_index = index*50
+            end_index = start_index + 50
+            result.append(','.join(accession_number_list[start_index:end_index]))
+        return {'code': result}
+    return {}
 
 def convert_extra_data_filter_type(extra_data_filter: Dict):
         new_extra_data_filter = extra_data_filter.copy()

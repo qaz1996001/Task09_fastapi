@@ -1,6 +1,6 @@
 import datetime
 import uuid
-from typing import Any, List, Optional, Dict
+from typing import Any, List, Optional, Dict, Union
 from pydantic import BaseModel
 
 
@@ -16,3 +16,8 @@ class StudyOutput(BaseModel):
 
     class Config:
         extra = "ignore"
+
+
+class ProjectInput(BaseModel):
+    name : Optional[str]
+

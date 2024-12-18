@@ -129,6 +129,9 @@ def post_patient_study_query(session: SessionDep,
                                                                 )).label('study_array_json'),
                            ).
              join(PatientModel, PatientModel.uid == StudyModel.patient_uid).
+             filter(PatientModel.deleted_at.is_(None),
+                    StudyModel.deleted_at.is_(None),
+                    ).
              group_by(PatientModel.uid, ).
              order_by(PatientModel.patient_id.desc()))
     print(query)

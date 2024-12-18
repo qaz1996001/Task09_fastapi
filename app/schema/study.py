@@ -10,7 +10,7 @@ from .base import op_list,CustomParams
 
 
 class StudyPostIn(BaseModel):
-    patient_uid       : uuid.UUID
+    patient_id        : str
     study_date        : datetime.date
     study_time        : datetime.time
     study_description : str
@@ -62,6 +62,7 @@ field_model = dict(
 )
 
 
+
 class StudySeriesOut(BaseModel):
     study_uid: str
     patient_uid: str
@@ -72,6 +73,15 @@ class StudySeriesOut(BaseModel):
     series_description: List[str]
     # series_description: List[Dict[str, int]]
 
+class StudySeriesTextOut(BaseModel):
+    study_uid: str
+    patient_uid: str
+    study_date: datetime.date
+    study_time: datetime.time
+    study_description: str
+    accession_number: str
+    series_description: List[str]
+    text: str
 
 class StudySeriesOut2(BaseModel):
     patient_id: str

@@ -1,23 +1,28 @@
 import calendar
 import re
+import traceback
+from datetime import datetime
 from typing import Annotated, Union, Any, List
 
 from fastapi import APIRouter
 from fastapi_pagination import Page,paginate
 from fastapi_pagination.api import create_page
-from sqlalchemy import and_, or_, any_, Text,exists,literal_column,select
+from sqlalchemy import  or_,  exists,literal_column,select, cast,String
 from sqlalchemy.dialects.postgresql import array,ARRAY
 from sqlalchemy.sql import func
+from sqlalchemy.sql.expression import literal
+
 from sqlalchemy_filters import apply_filters
+
 
 from app.core import SessionDep
 from app.core.paginate import paginate_items
-from app.model.study import StudyModel,TextReportModel
+from app.model.study import StudyModel,TextReportModel,TextReportRawModel
 from app.model.patient import PatientModel
 from app.model.series import SeriesModel
 from app.schema import study as study_schema
 from app.schema import base as base_schema
-from ..utils import get_model_by_field
+from ..utils import get_model_by_field,get_orther_filter
 
 
 
@@ -81,6 +86,20 @@ def get_StudySeriesOut(study_items_list):
     return response_list,series_description_set
 
 
+def get_StudySeriesTextOut(study_items_list):
+    response_list = []
+    for study_items in study_items_list:
+        response_list.append(study_schema.StudySeriesTextOut(study_uid=study_items.study_uid.hex,
+                                                         patient_uid=study_items.patient_uid.hex,
+                                                         study_date=study_items.study_date,
+                                                         study_time=study_items.study_time,
+                                                         study_description=study_items.study_description,
+                                                         accession_number=study_items.accession_number,
+                                                         series_description = study_items.series_description,
+                                                         text = study_items.text
+                                            ))
+    return response_list
+
 def get_StudySeriesOut2(study_items_list):
     response_list = []
     series_description_set = set()
@@ -139,8 +158,8 @@ def get_study(session: SessionDep) -> Page[study_schema.StudyOut]:
 
 @router.post(path="/",
              summary = "patient 存在，加入study")
-async def post_study(session: SessionDep,
-                     study_postIn_list: List[study_schema.StudyPostIn]):
+async def post_study(study_postIn_list: List[study_schema.StudyPostIn],
+                     session: SessionDep,):
 
     return ""
 
@@ -148,9 +167,54 @@ async def post_study(session: SessionDep,
 @router.post(path="/patient",
              summary = "patient 不存在，加入study"
              )
-async def post_study_patient(session: SessionDep,
-                       study_patient_postIn_list: List[study_schema.StudyPatientPostIn]):
-    return ""
+async def post_study_patient(study_postIn_list: List[study_schema.StudyPatientPostIn],
+                             session: SessionDep):
+    # study_schema.StudyPatientPostIn.patient_id
+    patient_id_list = list(map(lambda x : x.patient_id, study_postIn_list))
+    unnest_query = select(func.unnest(literal(patient_id_list)).label("patient_id"),
+                          func.unnest(literal(list(range(len(patient_id_list))))).label("index")
+                          ).cte("input_list")
+    query = (
+        select(unnest_query.c.patient_id,unnest_query.c.index).
+        join(PatientModel,unnest_query.c.patient_id == PatientModel.patient_id,isouter=True).
+        where(PatientModel.patient_id.is_(None),PatientModel.deleted_at.is_(None))  # 篩選不存在於 patient 表的項目
+    )
+    print(query)
+    result = list(map(lambda x: x, session.execute(query).fetchall()))
+    print('result',len(result))
+    if len(result) == 0:
+        return {}
+    study_patient_list = list(map(lambda x: study_postIn_list[x[1]],result))
+    for index, study_patient in enumerate(study_patient_list):
+        try:
+            patient = PatientModel(patient_id = study_patient.patient_id,
+                                   gender     = study_patient.gender,
+                                   birth_date = study_patient.birth_date,
+                                   orthanc_patient_ID= study_patient.orthanc_patient_ID,
+
+                                   )
+            session.add(patient)
+            session.flush()
+            study = StudyModel(patient_uid = patient.uid,
+                               study_date  = study_patient.study_date,
+                               study_time  = study_patient.study_time,
+                               study_description = study_patient.study_description,
+                               accession_number= study_patient.accession_number,
+                               created_at =datetime.now())
+
+            session.add(study)
+            if index % 100:
+                session.commit()
+            # session.refresh(patient)
+            # session.refresh(study)
+        except :
+            print(traceback.print_exc())
+            session.rollback()
+        finally:
+            session.commit()
+
+    # slice
+    return {'result':len(study_patient_list)}
 
 
 @router.post("/query")
@@ -169,15 +233,19 @@ async def post_study_query(filter_schema : study_schema.FilterSchema,
     if len(model_field_list) > 0:
         orther_filter             = list(filter(lambda x: x['field'] != 'series_description', filter_))
         filtered_query            = apply_filters(query, orther_filter)
-        print('filtered_query')
-        print(filtered_query)
-        print('filtered_query')
+
     else:
         filtered_query = query
 
+    filtered_query = filtered_query.filter(PatientModel.deleted_at.is_(None),
+                                           StudyModel.deleted_at.is_(None),
+                                           TextReportModel.deleted_at.is_(None),
+                                           )
+    print('filtered_query')
+    print(filtered_query)
+
     study_items_list, total, raw_params, params = paginate_items(session, filtered_query)
     response_list = get_StudyOut(study_items_list)
-
     page: Page[study_schema.StudyOut] = create_page(response_list, total, params)
     return page
 
@@ -202,6 +270,10 @@ async def post_study_series_query(filter_schema : study_schema.FilterSchema,
                            ).
               join(PatientModel,StudyModel.patient_uid==PatientModel.uid).
              join(SeriesModel, StudyModel.uid == SeriesModel.study_uid).
+             filter(PatientModel.deleted_at.is_(None),
+                    StudyModel.deleted_at.is_(None),
+                    SeriesModel.deleted_at.is_(None),
+                    ).
              group_by(StudyModel.uid,
                       PatientModel.uid,
                       PatientModel.patient_id,
@@ -216,7 +288,6 @@ async def post_study_series_query(filter_schema : study_schema.FilterSchema,
 
     if len(filter_) > 0:
         series_description_filter = list(filter(lambda x: x['field'] == 'series_description', filter_))
-        # orther_filter             = list(filter(lambda x: x['field'] != 'series_description', filter_))
         orther_filter             = list(filter(get_orther_filter, filter_))
         filtered_query            = apply_filters(query, orther_filter)
         study_series_cte  = filtered_query.cte('study_series')
@@ -245,8 +316,7 @@ async def post_study_series_query(filter_schema : study_schema.FilterSchema,
                                                        key=lambda x: base_schema.series_structure_sort.get(x, 999)),
                            group_key = series_description_group_key
                            )
-    page: study_schema.StudySeriesGroupPage[study_schema.StudySeriesOut] = create_page(response_list,
-                                                                                       total= total,
+    page: study_schema.StudySeriesGroupPage[study_schema.StudySeriesOut] = create_page(response_listtotal= total,
                                                                                        params=params,
                                                                                        **additional_data)
     return page
@@ -403,3 +473,59 @@ async def post_study_series_query(filter_schema : study_schema.FilterSchema,
     )
     response_dict.update(additional_data)
     return response_dict
+
+
+@router.get("/query/series/na")
+async def get_study_series_query_na(session: SessionDep) -> Page[study_schema.StudySeriesOut]:
+    subquery = session.query(SeriesModel.study_uid).distinct()
+    series_description = cast([], ARRAY(String))
+    query = ((session.query(PatientModel.uid.label('patient_uid'),
+                            PatientModel.patient_id.label('patient_id'),
+                            PatientModel.gender.label('gender'),
+                            PatientModel.birth_date.label('birth_date'),
+                            StudyModel.uid.label('study_uid'),
+                            StudyModel.study_date.label('study_date'),
+                            StudyModel.study_time.label('study_time'),
+                            StudyModel.study_description.label('study_description'),
+                            StudyModel.accession_number.label('accession_number'),
+                            series_description.label('series_description')
+                            ).
+              join(PatientModel, StudyModel.patient_uid == PatientModel.uid)).
+             filter(PatientModel.deleted_at.is_(None),
+                    StudyModel.deleted_at.is_(None),
+                    StudyModel.uid.notin_(subquery)
+                    ))
+    study_items_list, total, raw_params, params = paginate_items(session, query)
+    response_list, series_description_set = get_StudySeriesOut(study_items_list)
+    page: Page[study_schema.StudyOut] = create_page(response_list, total, params)
+    return page
+
+
+@router.get("/query/series/na/text")
+async def get_study_series_query_na_text(session: SessionDep) -> Page[study_schema.StudySeriesTextOut]:
+    subquery = session.query(SeriesModel.study_uid).distinct()
+    series_description = cast([], ARRAY(String))
+    query = ((session.query(PatientModel.uid.label('patient_uid'),
+                            PatientModel.patient_id.label('patient_id'),
+                            PatientModel.gender.label('gender'),
+                            PatientModel.birth_date.label('birth_date'),
+                            StudyModel.uid.label('study_uid'),
+                            StudyModel.study_date.label('study_date'),
+                            StudyModel.study_time.label('study_time'),
+                            StudyModel.study_description.label('study_description'),
+                            StudyModel.accession_number.label('accession_number'),
+                            series_description.label('series_description'),
+                            TextReportRawModel.text.label('text'),
+                            ).
+              join(PatientModel, StudyModel.patient_uid == PatientModel.uid)).
+             join(TextReportRawModel,StudyModel.accession_number == TextReportRawModel.accession_number,full=True).
+             filter(PatientModel.deleted_at.is_(None),
+                    StudyModel.deleted_at.is_(None),
+                    StudyModel.uid.notin_(subquery)
+                    ))
+    study_items_list, total, raw_params, params = paginate_items(session, query)
+
+    response_list = get_StudySeriesTextOut(study_items_list)
+    page: Page[study_schema.StudySeriesTextOut] = create_page(response_list, total, params)
+    return page
+

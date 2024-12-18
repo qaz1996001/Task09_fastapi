@@ -1,6 +1,6 @@
 import datetime
 import typing
-from typing import Annotated, Union, Any, List, Literal
+from typing import  Union, Any, List, Optional
 from uuid import UUID
 from fastapi import Body
 from fastapi_pagination import Page
@@ -15,7 +15,7 @@ class PatientBase(BaseModel):
 
 
 class PatientIn(PatientBase):
-    orthanc_patient_ID : Union[str,None] = Field(default=None)
+    orthanc_patient_ID : Optional[str] = Field(default=None)
 
 
 class PatientOut(PatientBase):

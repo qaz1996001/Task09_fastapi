@@ -33,3 +33,17 @@ class ProjectStudyPost(BaseModel):
     study_uid_list : List[Union[uuid.UUID,str]]
     class Config:
         extra = "ignore"
+
+
+class ProjectStudyPost(BaseModel):
+    project_uid    : Union[uuid.UUID,str]
+    study_uid_list : List[Union[uuid.UUID,str]]
+    class Config:
+        extra = "ignore"
+
+
+class ProjectStudyAccessionNumberPost(BaseModel):
+    project_uid    : Union[uuid.UUID,str]
+    accession_number_list : List[str]
+    class Config:
+        extra = "ignore"
