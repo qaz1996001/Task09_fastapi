@@ -8,9 +8,11 @@ from sqlalchemy_filters import apply_filters
 
 from app.core import SessionDep
 from app.core.paginate import paginate_items
-from app.model.study import TextReportModel,TextReportRawModel
+from app.model.patient import PatientModel
+from app.model.study import TextReportModel,TextReportRawModel,StudyModel
 from app.schema import base as base_schema
 from app.schema import text_report as text_report_schema
+from ..utils import get_model_by_field,get_regexp,get_regexp_filter,get_orther_filter
 
 router = APIRouter()
 
@@ -33,20 +35,22 @@ def get_impression_by_text(x):
             return ''
 
 
-def get_text_report(text_report_items_list: List[TextReportRawModel]):
+def get_text_report(text_report_items_list: List):
     response_list = []
     for text_report_items in text_report_items_list:
-        text_report = text_report_items[0]
-        if text_report.text:
-            text = text_report.text
+        # text_report = text_report_items[0]
+        text = text_report_items[-1]
+        if text:
             impression = get_impression_by_text(text)
         else:
             text = ""
             impression = ""
-        response_list.append(text_report_schema.TextReportOut(
-                                                   accession_number=text_report.accession_number,
-                                                   text=text,
-                                                   impression = impression
+        response_list.append(text_report_schema.TextReportOut(patient_id = text_report_items[0],
+                                                              gender = text_report_items[1],
+                                                              accession_number=text_report_items[2],
+                                                              study_description = text_report_items[3],
+                                                              text=text,
+                                                              impression = impression
                                                    ))
     return response_list
 
@@ -54,19 +58,44 @@ def get_text_report(text_report_items_list: List[TextReportRawModel]):
 @router.post("/query")
 async def post_text_report_query(filter_schema : base_schema.FilterSchema,
                                  session: SessionDep) -> text_report_schema.TextReportPage[text_report_schema.TextReportOut]:
-    print('filter_schema')
     filter_ = filter_schema.dict()['filter_']
-    print('model_field_list')
-    query = session.query(TextReportRawModel)
-    orther_filter             = list(filter(lambda x: x['field'] != 'series_description', filter_))
-    filtered_query            = apply_filters(query, orther_filter)
-    print('filtered_query')
-    print(filtered_query)
-    print('filtered_query')
-
+    filter_ = get_model_by_field(filter_,text_report_schema.field_model)
+    query = (session.query( PatientModel.patient_id,PatientModel.gender,
+                            TextReportModel.accession_number,
+                            StudyModel.study_description,
+                            TextReportModel.text,).
+             join(StudyModel,TextReportModel.accession_number==StudyModel.accession_number).
+             join(PatientModel,StudyModel.patient_uid==PatientModel.uid))
+    if len(filter_) > 0:
+        orther_filter = list(filter(get_orther_filter, filter_))
+        regexp_filter = list(filter(get_regexp_filter, filter_))
+        regexp_list = get_regexp(regexp_filter, TextReportModel)
+        filtered_query = apply_filters(query, orther_filter)
+        filtered_query = filtered_query.filter(*regexp_list)
+    else:
+        filtered_query = query
     text_report_items_list, total, raw_params, params = paginate_items(session, filtered_query)
     response_list = get_text_report(text_report_items_list)
-    #
+
     page: text_report_schema.TextReportPage[text_report_schema.TextReportOut] = create_page(response_list, total, params)
     return page
 
+
+# @router.post("/")
+# async def post_text_report(,
+#                                  session: SessionDep) -> text_report_schema.TextReportPage[text_report_schema.TextReportOut]:
+#     print('filter_schema')
+#     filter_ = filter_schema.dict()['filter_']
+#     print('model_field_list')
+#     query = session.query(TextReportRawModel)
+#     orther_filter             = list(filter(lambda x: x['field'] != 'series_description', filter_))
+#     filtered_query            = apply_filters(query, orther_filter)
+#     print('filtered_query')
+#     print(filtered_query)
+#     print('filtered_query')
+#
+#     text_report_items_list, total, raw_params, params = paginate_items(session, filtered_query)
+#     response_list = get_text_report(text_report_items_list)
+#     #
+#     page: text_report_schema.TextReportPage[text_report_schema.TextReportOut] = create_page(response_list, total, params)
+#     return page

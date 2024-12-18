@@ -40,17 +40,16 @@ def get_patient(patient_id:str,
     stmt = Select(PatientModel).filter(and_(PatientModel.deleted_at.is_(None),
                                             PatientModel.patient_id == patient_id,
                                             ))
-    print(stmt)
-    result = session.execute(stmt).first()[0]
-    print(result)
+    result = session.execute(stmt).first()
+
     if result is not None:
-        patient_out = PatientOut(patient_uid=result.uid.hex,
-                                 patient_id=result.patient_id,
-                                 gender=result.gender,
-                                 birth_date=result.birth_date)
+        patient_out = PatientOut(patient_uid=result[0].uid.hex,
+                                 patient_id=result[0].patient_id,
+                                 gender=result[0].gender,
+                                 birth_date=result[0].birth_date)
         return patient_out
     else:
-        return None
+        return {}
 
 
 @router.get("/")

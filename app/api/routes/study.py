@@ -17,16 +17,9 @@ from app.model.patient import PatientModel
 from app.model.series import SeriesModel
 from app.schema import study as study_schema
 from app.schema import base as base_schema
+from ..utils import get_model_by_field
 
 
-def get_model_by_field(field_list):
-    filter_field_list = list(filter(lambda x: study_schema.field_model.get(x['field']) is not None, field_list))
-    model_field_list = []
-    #  = list(map(lambda x: x['model'] = field_model.get(x['field'])) , filter_field_list))
-    for filter_field in filter_field_list:
-        filter_field['model'] = study_schema.field_model.get(filter_field['field'])
-        model_field_list.append(filter_field)
-    return model_field_list
 
 
 pattern_impression_str = re.compile(r'(?i:impression\s?:?|imp:?|conclusions?:?)')
@@ -165,7 +158,7 @@ async def post_study_query(filter_schema : study_schema.FilterSchema,
                  session: SessionDep) -> Page[study_schema.StudyOut]:
     print('filter_schema')
     filter_ = filter_schema.dict()['filter_']
-    model_field_list = get_model_by_field(filter_)
+    model_field_list = get_model_by_field(filter_,study_schema.field_model)
     print('model_field_list')
     print(model_field_list)
     query = (session.query(StudyModel).
@@ -194,9 +187,8 @@ async def post_study_query(filter_schema : study_schema.FilterSchema,
 async def post_study_series_query(filter_schema : study_schema.FilterSchema,
                       session: SessionDep) -> study_schema.StudySeriesGroupPage[study_schema.StudySeriesOut2]:
     filter_ = filter_schema.dict()['filter_']
-    model_field_list = get_model_by_field(filter_)
+    filter_ = get_model_by_field(filter_,study_schema.field_model)
     print('filter_',filter_)
-    print('model_field_list', model_field_list)
     query = (session.query(StudyModel.uid.label('study_uid'),
                            StudyModel.patient_uid.label('patient_uid'),
                            PatientModel.patient_id.label('patient_id'),
@@ -222,9 +214,10 @@ async def post_study_series_query(filter_schema : study_schema.FilterSchema,
              order_by(StudyModel.study_date.desc()))
 
 
-    if len(model_field_list) > 0:
+    if len(filter_) > 0:
         series_description_filter = list(filter(lambda x: x['field'] == 'series_description', filter_))
-        orther_filter             = list(filter(lambda x: x['field'] != 'series_description', filter_))
+        # orther_filter             = list(filter(lambda x: x['field'] != 'series_description', filter_))
+        orther_filter             = list(filter(get_orther_filter, filter_))
         filtered_query            = apply_filters(query, orther_filter)
         study_series_cte  = filtered_query.cte('study_series')
         series_description_filter_sqlaichemy_ = list(map(lambda x: or_(literal_column('series_desc').like(x['value'])),series_description_filter))
@@ -338,7 +331,7 @@ async def post_study_series_query(filter_schema : study_schema.FilterSchema,
                       session: SessionDep):
 
     filter_ = filter_schema.dict()['filter_']
-    model_field_list = get_model_by_field(filter_)
+    model_field_list = get_model_by_field(filter_,study_schema.field_model)
     print('filter_',filter_)
     print('model_field_list', model_field_list)
     query = (session.query(StudyModel.uid.label('study_uid'),
